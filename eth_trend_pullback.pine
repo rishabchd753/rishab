@@ -1,0 +1,72 @@
+//@version=5
+// ETH Intraday Trend-Pullback — 15m
+// Same rules as strategy.md / backtest.py in this repo:
+//   Regime:  EMA(200) filter — longs above, shorts below
+//   Entry:   EMA(9)>EMA(21), pullback touches EMA(21), close reclaims it,
+//            fill at next bar open (TradingView default behaviour)
+//   Exits:   stop = 1.5*ATR(14), target = 2R, time stop after 24 bars (6h)
+//   Sizing:  risk 1% of equity per trade
+// Apply on ETHUSDT (Binance), 15-minute chart, then open the Strategy Tester.
+
+strategy("ETH Trend-Pullback 15m",
+     overlay = true,
+     initial_capital = 10000,
+     currency = currency.USD,
+     commission_type = strategy.commission.percent,
+     commission_value = 0.05,          // 0.05% per side (Binance taker)
+     slippage = 2,
+     calc_on_every_tick = false,
+     process_orders_on_close = false)  // signals on close, fills next open — no look-ahead
+
+// ---------- Inputs ----------
+riskPct   = input.float(1.0,  "Risk per trade (%)",   minval = 0.1, step = 0.25) / 100
+atrMult   = input.float(1.5,  "ATR stop multiple",    minval = 0.5, step = 0.25)
+rewardR   = input.float(2.0,  "Reward : Risk",        minval = 0.5, step = 0.25)
+maxHold   = input.int(24,     "Time stop (bars)",     minval = 1)   // 24 x 15m = 6h
+longOnly  = input.bool(false, "Long only")
+
+// ---------- Indicators ----------
+emaFast   = ta.ema(close, 9)
+emaSlow   = ta.ema(close, 21)
+emaRegime = ta.ema(close, 200)
+atrVal    = ta.atr(14)
+
+// ---------- Setups (evaluated on bar close) ----------
+longSetup  = close > emaRegime and emaFast > emaSlow and low  <= emaSlow and close > emaSlow
+shortSetup = not longOnly and close < emaRegime and emaFast < emaSlow and high >= emaSlow and close < emaSlow
+
+// ---------- Entries with 1%-risk sizing ----------
+var float stopDist = na
+
+if longSetup and strategy.position_size == 0
+    stopDist := atrMult * atrVal
+    strategy.entry("Long", strategy.long, qty = strategy.equity * riskPct / stopDist)
+
+if shortSetup and strategy.position_size == 0
+    stopDist := atrMult * atrVal
+    strategy.entry("Short", strategy.short, qty = strategy.equity * riskPct / stopDist)
+
+// ---------- Stop / target off the actual fill price ----------
+if strategy.position_size > 0
+    strategy.exit("Long exit", "Long",
+         stop  = strategy.position_avg_price - stopDist,
+         limit = strategy.position_avg_price + rewardR * stopDist)
+
+if strategy.position_size < 0
+    strategy.exit("Short exit", "Short",
+         stop  = strategy.position_avg_price + stopDist,
+         limit = strategy.position_avg_price - rewardR * stopDist)
+
+// ---------- Time stop: flat after maxHold bars ----------
+if strategy.opentrades > 0
+    barsHeld = bar_index - strategy.opentrades.entry_bar_index(strategy.opentrades - 1)
+    if barsHeld >= maxHold
+        strategy.close_all(comment = "time stop")
+
+// ---------- Plots ----------
+plot(emaFast,   "EMA 9",   color = color.new(color.teal,   0))
+plot(emaSlow,   "EMA 21",  color = color.new(color.orange, 0))
+plot(emaRegime, "EMA 200", color = color.new(color.gray,   0), linewidth = 2)
+
+bgcolor(strategy.position_size > 0 ? color.new(color.green, 92) :
+     strategy.position_size < 0 ? color.new(color.red, 92) : na)

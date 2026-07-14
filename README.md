@@ -52,6 +52,13 @@ about real profitability.
 | `strategy.py` | Indicator + signal logic (no look-ahead) |
 | `backtest.py` | Event-driven backtest engine, stats, OOS split |
 | `make_demo_data.py` | Synthetic data generator for smoke tests |
+| `eth_trend_pullback.pine` | The same strategy as a TradingView Pine Script |
+
+## Backtesting on TradingView
+
+Paste `eth_trend_pullback.pine` into TradingView's Pine Editor on an
+ETHUSDT 15m chart and open the Strategy Tester tab. Same rules, fees, and
+sizing as the Python engine.
 
 ## Honest disclaimers
 
