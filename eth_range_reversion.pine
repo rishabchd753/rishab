@@ -1,0 +1,98 @@
+//@version=5
+// ETH Range Mean-Reversion — 15m
+// The regime-complement of eth_trend_pullback.pine. That strategy needs a
+// trend; this one needs the LACK of one. It only trades when ADX says the
+// market is ranging, fades the edges of the range (Bollinger band touch +
+// RSI confirmation), and targets the middle of the range.
+//
+//   Regime:  ADX(14) <= 25 → market is ranging (trend strategy stays out here)
+//   Long:    bar's low pierces the lower Bollinger(20, 2.0) band, bar closes
+//            back inside it, RSI(14) <= 35. Fill at next bar open. Mirror for shorts.
+//   Target:  the Bollinger basis (middle band) — the "mean" in mean reversion
+//   Stop:    1.2 * ATR(14) beyond entry. Mandatory: when a range breaks, the
+//            breakout will run — this is the trade that dies without a stop.
+//   Time stop: 24 bars (6h). Cooldown: 6 bars after any exit.
+//   Sizing:  risk 1% of equity per trade. Fees 0.05%/side.
+// Apply on ETHUSDT (Binance), 15-minute chart, then open the Strategy Tester.
+
+strategy("ETH Range-Reversion 15m",
+     overlay = true,
+     initial_capital = 10000,
+     currency = currency.USD,
+     commission_type = strategy.commission.percent,
+     commission_value = 0.05,
+     slippage = 2,
+     calc_on_every_tick = false,
+     process_orders_on_close = false)
+
+// ---------- Inputs ----------
+riskPct  = input.float(1.0,  "Risk per trade (%)",        minval = 0.1, step = 0.25) / 100
+bbLen    = input.int(20,     "Bollinger length",          minval = 5)
+bbMult   = input.float(2.0,  "Bollinger multiplier",      minval = 0.5, step = 0.25)
+rsiBand  = input.float(35.0, "RSI threshold (long <= X, short >= 100-X)", minval = 5, step = 1)
+adxMax   = input.float(25.0, "Max ADX (range regime)",    minval = 5, step = 1)
+atrMult  = input.float(1.2,  "ATR stop multiple",         minval = 0.5, step = 0.1)
+maxHold  = input.int(24,     "Time stop (bars)",          minval = 1)
+cooldown = input.int(6,      "Cooldown after exit (bars)", minval = 0)
+longOnly = input.bool(false, "Long only")
+
+// ---------- Indicators ----------
+basis   = ta.sma(close, bbLen)
+dev     = bbMult * ta.stdev(close, bbLen)
+upperBB = basis + dev
+lowerBB = basis - dev
+rsiVal  = ta.rsi(close, 14)
+atrVal  = ta.atr(14)
+[_, _, adxVal] = ta.dmi(14, 14)
+
+// ---------- Regime + cooldown gates ----------
+ranging = adxVal <= adxMax   // when ADX rises, the range is breaking: stand down
+
+var int lastExitBar = na
+justExited = strategy.position_size == 0 and strategy.position_size[1] != 0
+if justExited
+    lastExitBar := bar_index
+cooledDown = na(lastExitBar) or bar_index - lastExitBar >= cooldown
+
+// ---------- Setups (evaluated on bar close, filled next open) ----------
+longSetup  = ranging and cooledDown and low  <= lowerBB and close > lowerBB and rsiVal <= rsiBand
+shortSetup = not longOnly and ranging and cooledDown and high >= upperBB and close < upperBB and rsiVal >= 100 - rsiBand
+
+// ---------- Entries with 1%-risk sizing ----------
+var float stopDist = na
+
+if longSetup and strategy.position_size == 0
+    stopDist := atrMult * atrVal
+    strategy.entry("Long", strategy.long, qty = strategy.equity * riskPct / stopDist)
+
+if shortSetup and strategy.position_size == 0
+    stopDist := atrMult * atrVal
+    strategy.entry("Short", strategy.short, qty = strategy.equity * riskPct / stopDist)
+
+// ---------- Exits: stop beyond the range edge, target at the mean ----------
+// Guard the target so it can never sit below cost basis for longs (or above
+// it for shorts) if the basis drifts through the entry price.
+if strategy.position_size > 0
+    strategy.exit("Long exit", "Long",
+         stop  = strategy.position_avg_price - stopDist,
+         limit = math.max(basis, strategy.position_avg_price * 1.002))
+
+if strategy.position_size < 0
+    strategy.exit("Short exit", "Short",
+         stop  = strategy.position_avg_price + stopDist,
+         limit = math.min(basis, strategy.position_avg_price * 0.998))
+
+// ---------- Time stop ----------
+if strategy.opentrades > 0
+    barsHeld = bar_index - strategy.opentrades.entry_bar_index(strategy.opentrades - 1)
+    if barsHeld >= maxHold
+        strategy.close_all(comment = "time stop")
+
+// ---------- Plots ----------
+plot(basis,   "BB basis", color = color.new(color.orange, 0))
+pU = plot(upperBB, "BB upper", color = color.new(color.gray, 40))
+pL = plot(lowerBB, "BB lower", color = color.new(color.gray, 40))
+fill(pU, pL, color = ranging ? color.new(color.blue, 96) : color.new(color.red, 96))
+
+bgcolor(strategy.position_size > 0 ? color.new(color.green, 92) :
+     strategy.position_size < 0 ? color.new(color.red, 92) : na)

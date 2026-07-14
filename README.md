@@ -52,13 +52,25 @@ about real profitability.
 | `strategy.py` | Indicator + signal logic (no look-ahead) |
 | `backtest.py` | Event-driven backtest engine, stats, OOS split |
 | `make_demo_data.py` | Synthetic data generator for smoke tests |
-| `eth_trend_pullback.pine` | The same strategy as a TradingView Pine Script |
+| `eth_trend_pullback.pine` | The trend strategy as a TradingView Pine Script |
+| `eth_range_reversion.pine` | Mean-reversion strategy for ranging (ADX < 25) markets |
 
 ## Backtesting on TradingView
 
-Paste `eth_trend_pullback.pine` into TradingView's Pine Editor on an
-ETHUSDT 15m chart and open the Strategy Tester tab. Same rules, fees, and
-sizing as the Python engine.
+Paste either `.pine` file into TradingView's Pine Editor on an ETHUSDT 15m
+chart and open the Strategy Tester tab. Same fees and sizing as the Python
+engine.
+
+The two scripts are regime complements:
+
+- **Trend-pullback** trades only when ADX ≥ 20 and price is away from the
+  EMA(200). It profits in trending markets and (by design) sits out chop.
+- **Range-reversion** trades only when ADX ≤ 25. It fades Bollinger-band
+  extremes back to the middle of the range and profits in sideways markets —
+  exactly where the trend strategy bleeds.
+
+Test both over the same period: whichever regime dominates decides which
+strategy carried it. Neither wins in both regimes; that's why there are two.
 
 ## Honest disclaimers
 
