@@ -25,6 +25,8 @@ ADX_PERIOD = 14
 ADX_MIN = 20.0            # no trades unless the market is actually trending
 REGIME_DIST_ATR = 0.5     # price must be at least this many ATRs from EMA(200)
 COOLDOWN_BARS = 12        # 3h pause after an exit before the next entry
+MIN_ATR_PCT = 0.0015      # volatility floor: ATR must be >= 0.15% of price,
+                          # otherwise fees exceed the expected move — no trade
 
 
 def ema(series: pd.Series, period: int) -> pd.Series:
@@ -92,6 +94,9 @@ def generate_signals(df: pd.DataFrame, long_only: bool = False) -> pd.DataFrame:
     # gates the pullback condition fires almost every bar.
     trending = out["adx"] >= ADX_MIN
     regime_dist = (out["close"] - out["ema_regime"]).abs() >= REGIME_DIST_ATR * out["atr"]
+    vol_ok = out["atr"] / out["close"] >= MIN_ATR_PCT
+
+    trending = trending & vol_ok
 
     uptrend = (out["close"] > out["ema_regime"]) & trending & regime_dist
     downtrend = (out["close"] < out["ema_regime"]) & trending & regime_dist

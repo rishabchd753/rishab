@@ -27,6 +27,7 @@ longOnly  = input.bool(false, "Long only")
 adxMin    = input.float(20.0, "Min ADX (trend strength)", minval = 0, step = 1)
 distAtr   = input.float(0.5,  "Min distance from EMA200 (ATRs)", minval = 0, step = 0.25)
 cooldown  = input.int(12,     "Cooldown after exit (bars)", minval = 0)
+minAtrPct = input.float(0.15, "Min ATR (% of price) — volatility floor", minval = 0, step = 0.05)
 
 // ---------- Indicators ----------
 emaFast   = ta.ema(close, 9)
@@ -41,6 +42,9 @@ atrVal    = ta.atr(14)
 // keep the strategy flat until there is an actual trend to trade.
 trending   = adxVal >= adxMin
 farEnough  = math.abs(close - emaRegime) >= distAtr * atrVal
+// Volatility floor: stop distance is 1.5*ATR and the target 3*ATR. If ATR is
+// a rounding error relative to fees, no exit can pay for the trade.
+volOk      = atrVal / close * 100 >= minAtrPct
 
 var int lastExitBar = na
 justExited = strategy.position_size == 0 and strategy.position_size[1] != 0
@@ -49,8 +53,8 @@ if justExited
 cooledDown = na(lastExitBar) or bar_index - lastExitBar >= cooldown
 
 // ---------- Setups (evaluated on bar close) ----------
-longSetup  = trending and farEnough and cooledDown and close > emaRegime and emaFast > emaSlow and low  <= emaSlow and close > emaSlow
-shortSetup = not longOnly and trending and farEnough and cooledDown and close < emaRegime and emaFast < emaSlow and high >= emaSlow and close < emaSlow
+longSetup  = trending and farEnough and volOk and cooledDown and close > emaRegime and emaFast > emaSlow and low  <= emaSlow and close > emaSlow
+shortSetup = not longOnly and trending and farEnough and volOk and cooledDown and close < emaRegime and emaFast < emaSlow and high >= emaSlow and close < emaSlow
 
 // ---------- Entries with 1%-risk sizing ----------
 var float stopDist = na

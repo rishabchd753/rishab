@@ -31,6 +31,7 @@ bbLen    = input.int(20,     "Bollinger length",          minval = 5)
 bbMult   = input.float(2.0,  "Bollinger multiplier",      minval = 0.5, step = 0.25)
 rsiBand  = input.float(35.0, "RSI threshold (long <= X, short >= 100-X)", minval = 5, step = 1)
 adxMax   = input.float(25.0, "Max ADX (range regime)",    minval = 5, step = 1)
+minBandPct = input.float(0.6, "Min Bollinger width (% of price)", minval = 0, step = 0.1)
 atrMult  = input.float(1.2,  "ATR stop multiple",         minval = 0.5, step = 0.1)
 maxHold  = input.int(24,     "Time stop (bars)",          minval = 1)
 cooldown = input.int(6,      "Cooldown after exit (bars)", minval = 0)
@@ -48,6 +49,12 @@ atrVal  = ta.atr(14)
 // ---------- Regime + cooldown gates ----------
 ranging = adxVal <= adxMax   // when ADX rises, the range is breaking: stand down
 
+// Volatility floor: the profit target is the middle band, so the expected
+// winner is roughly half the band width. If the band is too narrow, fees and
+// slippage eat the whole move — the only winning trade is no trade.
+bandWidthPct = (upperBB - lowerBB) / close * 100
+wideEnough   = bandWidthPct >= minBandPct
+
 var int lastExitBar = na
 justExited = strategy.position_size == 0 and strategy.position_size[1] != 0
 if justExited
@@ -55,8 +62,8 @@ if justExited
 cooledDown = na(lastExitBar) or bar_index - lastExitBar >= cooldown
 
 // ---------- Setups (evaluated on bar close, filled next open) ----------
-longSetup  = ranging and cooledDown and low  <= lowerBB and close > lowerBB and rsiVal <= rsiBand
-shortSetup = not longOnly and ranging and cooledDown and high >= upperBB and close < upperBB and rsiVal >= 100 - rsiBand
+longSetup  = ranging and wideEnough and cooledDown and low  <= lowerBB and close > lowerBB and rsiVal <= rsiBand
+shortSetup = not longOnly and ranging and wideEnough and cooledDown and high >= upperBB and close < upperBB and rsiVal >= 100 - rsiBand
 
 // ---------- Entries with 1%-risk sizing ----------
 var float stopDist = na

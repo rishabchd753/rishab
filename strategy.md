@@ -31,6 +31,14 @@ strategy out of chop:
    EMA(200). If price is sitting on the regime line, there is no regime.
 3. **Cooldown:** after any exit, wait 12 bars (3 hours) before the next
    entry. Prevents machine-gun re-entries into the same dead range.
+4. **Volatility floor (v3):** ATR(14) must be at least 0.15% of price.
+   Round-trip costs are ~0.14% of the position; if the typical bar move is
+   smaller than that, every exit — even the winners — loses to fees. This is
+   the rule that keeps both strategies flat in dead, compressed markets like
+   ETH pinned at $1,800: the expected move must pay for the trade several
+   times over, or there is no trade. (The range-reversion Pine script uses
+   the equivalent gate: minimum Bollinger band width of 0.6% of price, since
+   its profit target is the middle band.)
 
 ### Long entry (mirror for shorts)
 1. Momentum aligned: EMA(9) > EMA(21).
