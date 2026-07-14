@@ -38,6 +38,7 @@ def run_backtest(
     entry_price = stop = target = qty = 0.0
     entry_time = None
     entry_bar = 0
+    last_exit_bar = -(10**9)  # cooldown: no re-entry right after an exit
     cost_per_side = fee_pct + slippage_pct
 
     for i in range(1, len(data)):
@@ -79,8 +80,9 @@ def run_backtest(
                     }
                 )
                 in_pos = False
+                last_exit_bar = i
 
-        if not in_pos:
+        if not in_pos and i - last_exit_bar >= strat.COOLDOWN_BARS:
             prev = data.iloc[i - 1]
             if prev["signal"] != 0 and not np.isnan(prev["atr"]):
                 direction = int(prev["signal"])

@@ -24,16 +24,33 @@ atrMult   = input.float(1.5,  "ATR stop multiple",    minval = 0.5, step = 0.25)
 rewardR   = input.float(2.0,  "Reward : Risk",        minval = 0.5, step = 0.25)
 maxHold   = input.int(24,     "Time stop (bars)",     minval = 1)   // 24 x 15m = 6h
 longOnly  = input.bool(false, "Long only")
+adxMin    = input.float(20.0, "Min ADX (trend strength)", minval = 0, step = 1)
+distAtr   = input.float(0.5,  "Min distance from EMA200 (ATRs)", minval = 0, step = 0.25)
+cooldown  = input.int(12,     "Cooldown after exit (bars)", minval = 0)
 
 // ---------- Indicators ----------
 emaFast   = ta.ema(close, 9)
 emaSlow   = ta.ema(close, 21)
 emaRegime = ta.ema(close, 200)
 atrVal    = ta.atr(14)
+[_, _, adxVal] = ta.dmi(14, 14)
+
+// ---------- Chop filters ----------
+// A trend strategy must sit out trendless markets. In flat chop, price hugs
+// every EMA and the pullback condition fires nearly every bar — these gates
+// keep the strategy flat until there is an actual trend to trade.
+trending   = adxVal >= adxMin
+farEnough  = math.abs(close - emaRegime) >= distAtr * atrVal
+
+var int lastExitBar = na
+justExited = strategy.position_size == 0 and strategy.position_size[1] != 0
+if justExited
+    lastExitBar := bar_index
+cooledDown = na(lastExitBar) or bar_index - lastExitBar >= cooldown
 
 // ---------- Setups (evaluated on bar close) ----------
-longSetup  = close > emaRegime and emaFast > emaSlow and low  <= emaSlow and close > emaSlow
-shortSetup = not longOnly and close < emaRegime and emaFast < emaSlow and high >= emaSlow and close < emaSlow
+longSetup  = trending and farEnough and cooledDown and close > emaRegime and emaFast > emaSlow and low  <= emaSlow and close > emaSlow
+shortSetup = not longOnly and trending and farEnough and cooledDown and close < emaRegime and emaFast < emaSlow and high >= emaSlow and close < emaSlow
 
 // ---------- Entries with 1%-risk sizing ----------
 var float stopDist = na

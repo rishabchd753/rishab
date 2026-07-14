@@ -21,6 +21,17 @@ Every rule is exact so it can be backtested and judged on numbers, not vibes.
 - Price above EMA(200) → **long trades only**.
 - Price below EMA(200) → **short trades only** (or flat if `--long-only`).
 
+### Chop filters (v2) — "no trade" is a position
+A trend strategy in a flat market overtrades and bleeds fees: price hugs the
+EMAs, so the pullback condition fires nearly every bar. Three gates keep the
+strategy out of chop:
+1. **Trend strength:** ADX(14) must be ≥ 20. Below that, the market is
+   officially going nowhere — no trades in either direction.
+2. **Regime distance:** price must be at least 0.5 × ATR(14) away from the
+   EMA(200). If price is sitting on the regime line, there is no regime.
+3. **Cooldown:** after any exit, wait 12 bars (3 hours) before the next
+   entry. Prevents machine-gun re-entries into the same dead range.
+
 ### Long entry (mirror for shorts)
 1. Momentum aligned: EMA(9) > EMA(21).
 2. Pullback: the bar's **low touches or pierces EMA(21)**.
